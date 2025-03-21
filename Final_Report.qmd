@@ -1,0 +1,2167 @@
+---
+title: "Battery Materials Property Analysis"
+format:
+  html:
+    self-contained: true
+    code-fold: false
+    toc: true
+    fig-path: "Final_Report_files/"
+execute:
+  echo: true
+  warning: false
+  fig-format: "png"
+  fig-keep: "none"  # Don't keep matplotlib figures
+---
+## Final Project Report
+
+### Introduction
+
+This project explores a dataset of battery materials and their properties, focusing on understanding the relationships between chemical compositions and key performance metrics such as Capacity, Conductivity, Coulombic Efficiency, Energy, and Voltage. The analysis uses Neural Networks to identify patterns and build predictive models that could help in battery material design.
+
+### Setup and Data Import
+
+
+```{python}
+import pandas as pd
+import seaborn as sns
+import numpy as np
+from matplotlib import pyplot as plt
+import ast
+from sklearn.impute import SimpleImputer
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_percentage_error, mean_absolute_error, mean_squared_error
+import tensorflow as tf
+from tensorflow import keras
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, Dense, Dropout, BatchNormalization
+from tensorflow.keras.optimizers import Adam
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import r2_score, mean_squared_error
+from tensorflow.keras import layers, regularizers
+
+import os
+os.makedirs('Final_Report_files', exist_ok=True)
+
+# Set display options
+pd.set_option('display.max_columns', None)
+sns.set_theme(style="whitegrid")
+sns.set_palette("colorblind")
+plt.rcParams['figure.figsize'] = [12, 8]
+plt.rcParams['font.size'] = 12
+```
+
+# Original Data
+
+
+```{python}
+orig_df = pd.read_csv("battery_merged.csv")
+
+# Display sample data
+orig_df.sample(5)
+```
+
+
+
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Property</th>
+      <th>Name</th>
+      <th>Value</th>
+      <th>Raw_unit</th>
+      <th>Raw_value</th>
+      <th>Unit</th>
+      <th>Num_records</th>
+      <th>Extracted_name</th>
+      <th>DOI</th>
+      <th>Specifier</th>
+      <th>Tag</th>
+      <th>Warning</th>
+      <th>Type</th>
+      <th>Info</th>
+      <th>Title</th>
+      <th>Journal</th>
+      <th>Date</th>
+      <th>Correctness</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>164951</th>
+      <td>Voltage</td>
+      <td>Ni3S2 / Ni</td>
+      <td>0.1593</td>
+      <td>mV</td>
+      <td>159.3</td>
+      <td>Volt^(1.0)</td>
+      <td>1</td>
+      <td>[{'Ni': '3.0', 'S': '2.0'}, {'Ni': '1.0'}]</td>
+      <td>10.1039/C3EE41572D</td>
+      <td>NaN</td>
+      <td>CDE</td>
+      <td>LS,</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>Ni 3 S 2  nanorods /Ni foam composite electrod...</td>
+      <td>Energy &amp; Environmental Science</td>
+      <td>2013/09/18</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>3160</th>
+      <td>Capacity</td>
+      <td>NiO @ Co3O4</td>
+      <td>70.0000</td>
+      <td>mAhg−1</td>
+      <td>70</td>
+      <td>Gram^(-1.0)  Hour^(1.0)  MilliAmpere^(1.0)</td>
+      <td>1</td>
+      <td>[{'Ni': '1.0', 'O': '1.0'}, {'Co': '3.0', 'O':...</td>
+      <td>10.1016/j.matlet.2015.07.004</td>
+      <td>NaN</td>
+      <td>CDE</td>
+      <td>S,</td>
+      <td>NaN</td>
+      <td>{'current_value': '1.25', 'current_units': 'Ag...</td>
+      <td>SYNTHESISSHISHKEBABLIKENIOCO3O4NANOWIREARRAYSA...</td>
+      <td>Materials Letters</td>
+      <td>2015-07-06</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>97264</th>
+      <td>Capacity</td>
+      <td>Li3N</td>
+      <td>661.0000</td>
+      <td>mAhg−1</td>
+      <td>661</td>
+      <td>Gram^(-1.0)  Hour^(1.0)  MilliAmpere^(1.0)</td>
+      <td>1</td>
+      <td>[{'Li': '3.0', 'N': '1.0'}]</td>
+      <td>10.1016/j.ensm.2017.06.016</td>
+      <td>discharge capacity,</td>
+      <td>CDE</td>
+      <td>S,</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>VARIATIONSLI3NPROTECTIVECOATINGUSINGEXSITUINSI...</td>
+      <td>Energy Storage Materials</td>
+      <td>2017-07-14</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>97039</th>
+      <td>Coulombic Efficiency</td>
+      <td>CeO2</td>
+      <td>91.0000</td>
+      <td>%</td>
+      <td>91</td>
+      <td>Percent^(1.0)</td>
+      <td>1</td>
+      <td>[{'Ce': '1.0', 'O': '2.0'}]</td>
+      <td>10.1039/C4RA00632A</td>
+      <td>Coulombic,</td>
+      <td>CDE</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>Facile synthesis of cerium oxide nanostructure...</td>
+      <td>RSC Advances</td>
+      <td>2014/03/21</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <th>39485</th>
+      <td>Capacity</td>
+      <td>Li4Ti5O12 oxides</td>
+      <td>175.0000</td>
+      <td>mAhg−1</td>
+      <td>∼ 175</td>
+      <td>Gram^(-1.0)  Hour^(1.0)  MilliAmpere^(1.0)</td>
+      <td>1</td>
+      <td>[{'Li': '4.0', 'Ti': '5.0', 'O': '12.0'}]</td>
+      <td>10.1016/j.jpowsour.2009.11.073</td>
+      <td>discharge capacity,</td>
+      <td>CDE</td>
+      <td>S,</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>SYNTHESISLITHIUMINSERTIONMATERIALLI4TI5O12RUTI...</td>
+      <td>Journal of Power Sources</td>
+      <td>2009-11-24</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+# Data after cleaning
+
+After cleaning and removing outliers in a separate script, import the clean csv file
+
+Data cleaning process:
+
+- Remove outliers from all target variables
+
+- Remove all rows where the 'correctness' confidence is below a thrreshhold
+
+- Resutrucutre the data to incorporate properties as features and Compounds as unique keys 
+
+- Introduce features for individual elemental compositions
+
+
+```{python}
+battery_df = pd.read_csv("clean_df.csv")
+battery_df.sample(5)
+```
+
+<div>
+<style scoped>
+    .dataframe tbody tr th:only-of-type {
+        vertical-align: middle;
+    }
+
+    .dataframe tbody tr th {
+        vertical-align: top;
+    }
+
+    .dataframe thead th {
+        text-align: right;
+    }
+</style>
+<table border="1" class="dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th></th>
+      <th>Unnamed: 0</th>
+      <th>Name</th>
+      <th>Extracted_name</th>
+      <th>Capacity</th>
+      <th>Conductivity</th>
+      <th>Coulombic Efficiency</th>
+      <th>Energy</th>
+      <th>Voltage</th>
+      <th>parsed_name</th>
+      <th>elements_cnt</th>
+      <th>Capacity_known</th>
+      <th>Conductivity_known</th>
+      <th>Coulombic Efficiency_known</th>
+      <th>Energy_known</th>
+      <th>Voltage_known</th>
+      <th>Pd_fraction</th>
+      <th>S_fraction</th>
+      <th>Na_fraction</th>
+      <th>Ru_fraction</th>
+      <th>Zr_fraction</th>
+      <th>Cn_fraction</th>
+      <th>Hg_fraction</th>
+      <th>Be_fraction</th>
+      <th>Rb_fraction</th>
+      <th>Si_fraction</th>
+      <th>Ra_fraction</th>
+      <th>Sg_fraction</th>
+      <th>Sc_fraction</th>
+      <th>Mn_fraction</th>
+      <th>Pr_fraction</th>
+      <th>Cl_fraction</th>
+      <th>Co_fraction</th>
+      <th>Br_fraction</th>
+      <th>Ac_fraction</th>
+      <th>Ta_fraction</th>
+      <th>Ni_fraction</th>
+      <th>Cu_fraction</th>
+      <th>O_fraction</th>
+      <th>Al_fraction</th>
+      <th>Ho_fraction</th>
+      <th>Th_fraction</th>
+      <th>Hs_fraction</th>
+      <th>Tl_fraction</th>
+      <th>K_fraction</th>
+      <th>Sm_fraction</th>
+      <th>Np_fraction</th>
+      <th>W_fraction</th>
+      <th>Ga_fraction</th>
+      <th>In_fraction</th>
+      <th>Ar_fraction</th>
+      <th>Yb_fraction</th>
+      <th>Rh_fraction</th>
+      <th>Bi_fraction</th>
+      <th>Eu_fraction</th>
+      <th>Pb_fraction</th>
+      <th>Mo_fraction</th>
+      <th>Er_fraction</th>
+      <th>Re_fraction</th>
+      <th>B_fraction</th>
+      <th>Mg_fraction</th>
+      <th>Cd_fraction</th>
+      <th>Cm_fraction</th>
+      <th>Sr_fraction</th>
+      <th>Se_fraction</th>
+      <th>Rf_fraction</th>
+      <th>Li_fraction</th>
+      <th>C_fraction</th>
+      <th>At_fraction</th>
+      <th>Sn_fraction</th>
+      <th>Ca_fraction</th>
+      <th>Nd_fraction</th>
+      <th>Nb_fraction</th>
+      <th>Po_fraction</th>
+      <th>Ti_fraction</th>
+      <th>Y_fraction</th>
+      <th>Dy_fraction</th>
+      <th>F_fraction</th>
+      <th>Zn_fraction</th>
+      <th>H_fraction</th>
+      <th>Pm_fraction</th>
+      <th>N_fraction</th>
+      <th>Es_fraction</th>
+      <th>Hf_fraction</th>
+      <th>I_fraction</th>
+      <th>Os_fraction</th>
+      <th>Pa_fraction</th>
+      <th>P_fraction</th>
+      <th>V_fraction</th>
+      <th>Pu_fraction</th>
+      <th>Gd_fraction</th>
+      <th>Tb_fraction</th>
+      <th>U_fraction</th>
+      <th>Sb_fraction</th>
+      <th>Ag_fraction</th>
+      <th>Ge_fraction</th>
+      <th>Ce_fraction</th>
+      <th>Pt_fraction</th>
+      <th>Te_fraction</th>
+      <th>Ir_fraction</th>
+      <th>Cr_fraction</th>
+      <th>Ba_fraction</th>
+      <th>Cs_fraction</th>
+      <th>La_fraction</th>
+      <th>As_fraction</th>
+      <th>Am_fraction</th>
+      <th>Fe_fraction</th>
+      <th>Au_fraction</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <th>2135</th>
+      <td>17695</td>
+      <td>NaSi</td>
+      <td>[{'Na': '1.0', 'Si': '1.0'}]</td>
+      <td>889.500</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>[{'Na': '1.0', 'Si': '1.0'}]</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>1758</th>
+      <td>15066</td>
+      <td>MnTi</td>
+      <td>[{'Mn': '1.0', 'Ti': '1.0'}]</td>
+      <td>158.945</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>[{'Mn': '1.0', 'Ti': '1.0'}]</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>6</th>
+      <td>49</td>
+      <td>(C6H7FN)4(Li)2(P6O18)</td>
+      <td>[{'C': '24.0', 'H': '28.0', 'F': '4.0', 'N': '...</td>
+      <td>NaN</td>
+      <td>0.000179</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>[{'C': '24.0', 'H': '28.0', 'F': '4.0', 'N': '...</td>
+      <td>1</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>18.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>2.0</td>
+      <td>24.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>4.0</td>
+      <td>0.0</td>
+      <td>28.0</td>
+      <td>0.0</td>
+      <td>4.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>6.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>1374</th>
+      <td>11095</td>
+      <td>LiBSB</td>
+      <td>[{'Li': '1.0', 'B': '2.0', 'S': '1.0'}]</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>4.46</td>
+      <td>[{'Li': '1.0', 'B': '2.0', 'S': '1.0'}]</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>1</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>2.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>1.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+    <tr>
+      <th>2675</th>
+      <td>21700</td>
+      <td>Sn54Sb41Co5</td>
+      <td>[{'Sn': '54.0', 'Sb': '41.0', 'Co': '5.0'}]</td>
+      <td>377.600</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>NaN</td>
+      <td>[{'Sn': '54.0', 'Sb': '41.0', 'Co': '5.0'}]</td>
+      <td>1</td>
+      <td>1</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>5.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>54.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>41.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+      <td>0.0</td>
+    </tr>
+  </tbody>
+</table>
+</div>
+
+
+
+### Exploratory Data Analysis
+
+#### Target Variable Analysis
+
+First, let's examine the availability of our key target variables in the dataset.
+
+```{python}
+# Look at the distributions of target variables where available
+target_vars = ['Capacity', 'Conductivity', 'Coulombic Efficiency', 'Energy', 'Voltage']
+plt.figure(figsize=(15, 10))
+for i, target in enumerate(target_vars):
+    plt.subplot(2, 3, i+1)
+    plt.hist(battery_df[target].dropna(), bins=20, color='steelblue', alpha=0.7)
+    plt.title(f'Distribution of {target}', fontsize=14)
+    plt.xlabel(target, fontsize=12)
+    plt.ylabel('Count', fontsize=12)
+plt.tight_layout()
+plt.savefig('target_distributions.png')
+plt.close() #plt.show()
+```
+
+    
+![png](Final%20Report_files/Final%20Report_7_0.png)
+    
+
+
+
+```{python}
+target_vars = ['Capacity', 'Conductivity', 'Coulombic Efficiency', 'Energy', 'Voltage']
+missing_percentages = {target: (battery_df[target].isna().sum() / len(battery_df) * 100) 
+                      for target in target_vars}
+
+# Sort by missing percentage
+sorted_missing = dict(sorted(missing_percentages.items(), key=lambda x: x[1], reverse=True))
+
+# Create figure with two subplots
+fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
+
+# Bar chart of missing percentages
+colors = plt.cm.Reds(np.linspace(0.6, 0.9, len(sorted_missing)))
+ax1.bar(sorted_missing.keys(), sorted_missing.values(), color=colors)
+ax1.set_xlabel('Battery Property', fontsize=12)
+ax1.set_ylabel('Missing Data (%)', fontsize=12)
+ax1.set_title('Missing Values in Battery Properties', fontsize=14, fontweight='bold')
+ax1.set_ylim(0, 100)
+ax1.grid(axis='y', alpha=0.3)
+
+# Add text labels to bars
+for i, (target, pct) in enumerate(sorted_missing.items()):
+    ax1.text(i, pct + 2, f'{pct:.1f}%', ha='center', fontweight='bold')
+
+# Heatmap showing available vs missing data
+data_availability = pd.DataFrame({
+    'Available': [100 - pct for pct in sorted_missing.values()],
+    'Missing': list(sorted_missing.values())
+}, index=sorted_missing.keys())
+
+sns.heatmap(data_availability, annot=True, fmt='.1f', cmap='RdYlGn_r',
+           cbar_kws={'label': 'Percentage (%)'}, ax=ax2)
+ax2.set_title('Data Availability for Battery Properties', fontsize=14, fontweight='bold')
+
+plt.tight_layout()
+plt.savefig('missing_data_visualization.png', dpi=300, bbox_inches='tight')
+plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_8_0.png)
+
+
+
+# Visualization reveals significant data sparsity:
+
+- Coulombic Efficiency: 91.7% missing
+
+- Conductivity: 91.3% missing  
+
+- Energy: 73.3% missing
+
+- Capacity: 49.3% missing
+
+- Voltage: 47.0% missing
+
+This sparsity will significantly impact our modeling approach, particularly for Coulombic Efficiency and Conductivity where over 90% of the data is missing.
+
+Due to this we chose to drop the two from our targets instead only focusing on Energy, Capacity and Voltage
+
+
+
+#### Dataset Overview
+
+
+```{python}
+column_list = list(battery_df.columns)
+print("Dataset columns:")
+print(column_list)
+```
+
+    Dataset columns:
+    ['Unnamed: 0', 'Name', 'Extracted_name', 'Capacity', 'Conductivity', 'Coulombic Efficiency', 'Energy', 'Voltage', 'parsed_name', 'elements_cnt', 'Capacity_known', 'Conductivity_known', 'Coulombic Efficiency_known', 'Energy_known', 'Voltage_known', 'Pd_fraction', 'S_fraction', 'Na_fraction', 'Ru_fraction', 'Zr_fraction', 'Cn_fraction', 'Hg_fraction', 'Be_fraction', 'Rb_fraction', 'Si_fraction', 'Ra_fraction', 'Sg_fraction', 'Sc_fraction', 'Mn_fraction', 'Pr_fraction', 'Cl_fraction', 'Co_fraction', 'Br_fraction', 'Ac_fraction', 'Ta_fraction', 'Ni_fraction', 'Cu_fraction', 'O_fraction', 'Al_fraction', 'Ho_fraction', 'Th_fraction', 'Hs_fraction', 'Tl_fraction', 'K_fraction', 'Sm_fraction', 'Np_fraction', 'W_fraction', 'Ga_fraction', 'In_fraction', 'Ar_fraction', 'Yb_fraction', 'Rh_fraction', 'Bi_fraction', 'Eu_fraction', 'Pb_fraction', 'Mo_fraction', 'Er_fraction', 'Re_fraction', 'B_fraction', 'Mg_fraction', 'Cd_fraction', 'Cm_fraction', 'Sr_fraction', 'Se_fraction', 'Rf_fraction', 'Li_fraction', 'C_fraction', 'At_fraction', 'Sn_fraction', 'Ca_fraction', 'Nd_fraction', 'Nb_fraction', 'Po_fraction', 'Ti_fraction', 'Y_fraction', 'Dy_fraction', 'F_fraction', 'Zn_fraction', 'H_fraction', 'Pm_fraction', 'N_fraction', 'Es_fraction', 'Hf_fraction', 'I_fraction', 'Os_fraction', 'Pa_fraction', 'P_fraction', 'V_fraction', 'Pu_fraction', 'Gd_fraction', 'Tb_fraction', 'U_fraction', 'Sb_fraction', 'Ag_fraction', 'Ge_fraction', 'Ce_fraction', 'Pt_fraction', 'Te_fraction', 'Ir_fraction', 'Cr_fraction', 'Ba_fraction', 'Cs_fraction', 'La_fraction', 'As_fraction', 'Am_fraction', 'Fe_fraction', 'Au_fraction']
+
+
+The dataset now contains information about material names, target properties, and a large number of element fractions representing the chemical composition of each material.
+
+### Relationship Analysis
+
+Explore the relationships between:
+
+- element compositions and battery properties.
+
+
+
+```{python}
+# Extract element fraction columns
+element_cols = [col for col in battery_df.columns if '_fraction' in col]
+
+# Calculate correlation between elements and targets where data is available
+correlation_results = {}
+for target in target_vars:
+    # Get correlation for each element with the target
+    valid_data = battery_df[~battery_df[target].isna()]
+    if len(valid_data) > 0:  # Only if we have some data
+        correlations = []
+        for elem in element_cols:
+            if valid_data[elem].nunique() > 1:  # Only if the element has variation
+                corr = np.corrcoef(valid_data[elem], valid_data[target])[0, 1]
+                correlations.append((elem, corr))
+        # Sort by absolute correlation
+        correlations.sort(key=lambda x: abs(x[1]), reverse=True)
+        correlation_results[target] = correlations[:10]  # Top 10 correlations
+
+# Create a visualization of top element correlations for each target
+plt.figure(figsize=(16, 12))
+# For each target property, show top 5 correlations
+for i, target in enumerate(target_vars):
+    if target not in correlation_results:
+        continue
+    # Get top 5 correlations by absolute value
+    top_correlations = correlation_results[target][:5]
+    # Extract elements and correlation values
+    elements = [item[0].replace('_fraction', '') for item in top_correlations]
+    correlations = [item[1] for item in top_correlations]
+    # Create subplot for this target
+    plt.subplot(2, 3, i+1)
+    # Colors based on positive/negative correlation
+    colors = ['#2C7BB6' if c < 0 else '#D7191C' for c in correlations]
+    # Plot horizontal bar chart
+    bars = plt.barh(elements, correlations, color=colors)
+    # Add values to the end of each bar
+    for bar in bars:
+        width = bar.get_width()
+        label_x_pos = width + 0.01 if width > 0 else width - 0.07
+        plt.text(label_x_pos, bar.get_y() + bar.get_height()/2,
+                f'{width:.3f}', va='center')
+    plt.axvline(x=0, color='black', linestyle='-', alpha=0.3)
+    plt.title(f'Top Element Correlations with {target}')
+    plt.xlabel('Correlation Coefficient')
+    plt.ylabel('Elements')
+    plt.xlim(-0.3, 0.3)
+plt.tight_layout()
+plt.savefig('element_correlations.png')
+plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_15_0.png)
+    
+The interactions between individual elements and the target variables are very weak with the largest being |.153| between Energy an Pt among the three chosen target variables
+
+ 
+
+
+```{python}
+for target in target_vars:
+    if target not in correlation_results:
+        continue
+    
+    # Get top 10 correlating elements
+    top_elements = [elem[0] for elem in correlation_results[target]]
+    
+    # Create a subset of the data with target and top elements
+    valid_data = battery_df[~battery_df[target].isna()]
+    corr_df = valid_data[[target] + top_elements]
+    
+    # Calculate correlation matrix
+    corr_matrix = corr_df.corr()
+    
+    # Create heatmap
+    plt.figure(figsize=(10, 8))
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+    sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='coolwarm',
+                square=True, linewidths=.5, cbar_kws={"shrink": .8})
+    plt.title(f'Correlation Heatmap: {target} vs Top Elements', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(f'{target}_element_correlation_heatmap.png')
+    plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_17_0.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_17_1.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_17_2.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_17_3.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_17_4.png)
+
+
+
+- correlations between the target variables themselves:
+
+
+```{python}
+valid_targets = battery_df[target_vars].dropna(how='all')
+if len(valid_targets) > 0:
+    target_corr = valid_targets.corr()
+    plt.figure(figsize=(10, 8))
+    mask = np.triu(np.ones_like(target_corr, dtype=bool))
+    sns.heatmap(target_corr, mask=mask, annot=True, fmt='.2f', cmap='coolwarm', 
+                square=True, linewidths=.5, cbar_kws={"shrink": .8})
+    plt.title('Correlation Between Target Variables', fontsize=16)
+    plt.tight_layout()
+    plt.savefig('target_correlations.png')
+    plt.close() #plt.show()
+    
+    print("\nCorrelation between target variables:")
+    print(target_corr)
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_20_0.png)
+    
+
+
+    
+    Correlation between target variables:
+                          Capacity  Conductivity  Coulombic Efficiency    Energy  \
+    Capacity              1.000000      0.059616             -0.301985  0.406381   
+    Conductivity          0.059616      1.000000             -0.029675  0.040337   
+    Coulombic Efficiency -0.301985     -0.029675              1.000000 -0.110273   
+    Energy                0.406381      0.040337             -0.110273  1.000000   
+    Voltage              -0.372989     -0.160456              0.204989  0.090613   
+    
+                           Voltage  
+    Capacity             -0.372989  
+    Conductivity         -0.160456  
+    Coulombic Efficiency  0.204989  
+    Energy                0.090613  
+    Voltage               1.000000  
+
+The three target variables: Capacity, Energy and Voltage being correlated to each other makes sense as they are all physically interacting properties (E = C x Time, C = k/V)
+
+
+### Baseline Model Development
+
+
+```{python}
+def train_baseline_nn(X, y, test_size=0.2, random_state=42):
+    """Train a simple neural network as baseline"""
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+    
+    # Standardize features and target variables to ensure that the model trains effectively without bias toward larger scale variables.
+    X_scaler = StandardScaler()
+    X_train_scaled = X_scaler.fit_transform(X_train)
+    X_test_scaled = X_scaler.transform(X_test)
+    
+    y_scaler = StandardScaler()
+    y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1)).flatten()
+    y_test_scaled = y_scaler.transform(y_test.values.reshape(-1, 1)).flatten()
+    
+    # Create simple model
+    model = keras.Sequential([
+        layers.Dense(64, activation='relu', input_shape=(X_train.shape[1],)),
+        layers.Dense(32, activation='relu'),
+        layers.Dense(1)
+    ])
+    
+    # Compile model
+    model.compile(optimizer='adam', loss='mse', metrics=['mae'])
+    
+    # Train model
+    history = model.fit(
+        X_train_scaled, y_train_scaled,
+        validation_split=0.2,
+        epochs=100,
+        batch_size=32,
+        callbacks=[
+            # Use early stopping to prevent overfitting by stopping training when the validation loss does not improve for 20 epochs
+            keras.callbacks.EarlyStopping(
+                monitor='val_loss', patience=20, restore_best_weights=True
+            )
+        ],
+        verbose=0
+    )
+    
+    # Evaluate model
+    y_pred_scaled = model.predict(X_test_scaled, verbose=0).flatten()
+    y_pred = y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+    
+    # Calculate metrics
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+    
+    # Return results
+    return {
+        'model': model,
+        'history': history,
+        'X_scaler': X_scaler,
+        'y_scaler': y_scaler,
+        'y_test': y_test,
+        'y_pred': y_pred,
+        'mse': mse,
+        'rmse': rmse,
+        'r2': r2,
+        'train_size': len(X_train),
+        'test_size': len(X_test)
+    }
+# Focus on targets with more data available
+baseline_target_vars = ['Capacity', 'Energy', 'Voltage']
+
+# Train baseline models
+baseline_models = {}
+for target in baseline_target_vars:
+    print(f"\nTraining baseline model for {target}...")
+    # Get valid data for this target
+    mask = ~battery_df[target].isna()
+    X = battery_df[element_cols][mask]
+    y = battery_df[target][mask]
+    
+    # Train model
+    result = train_baseline_nn(X, y)
+    baseline_models[target] = result
+    
+    # Print performance metrics
+    print(f" Samples: {result['train_size']} train, {result['test_size']} test")
+    print(f" RMSE: {result['rmse']:.4f}")
+    print(f" R²: {result['r2']:.4f}")
+```
+
+```{python}
+plt.figure(figsize=(15, 12))
+for i, target in enumerate(baseline_target_vars):
+    plt.subplot(3, 1, i+1)
+    plt.plot(baseline_models[target]['history'].history['loss'], label='Training Loss')
+    plt.plot(baseline_models[target]['history'].history['val_loss'], label='Validation Loss')
+    plt.title(f'Baseline Model Learning Curves: {target}', fontsize=14)
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    
+    # Add metrics as text
+    plt.text(0.05, 0.85, f"R² = {baseline_models[target]['r2']:.3f}", 
+             transform=plt.gca().transAxes)
+    plt.text(0.05, 0.78, f"RMSE = {baseline_models[target]['rmse']:.3f}", 
+             transform=plt.gca().transAxes)
+    
+plt.tight_layout()
+plt.savefig('baseline_learning_curves.png', dpi=300)
+plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_23_0.png)
+
+- The model is overfitting which means we need to reduce the number of layers 
+- The lack of data is really hurting the model and we need to find ways to compensate for this
+
+### Feature Engineering
+
+The correlations between elemental compositions and target properties are relatively weak, suggesting we need to rely on feature engineering to improve predictive power.
+
+#### Data Cleaning
+
+
+
+```{python}
+# Set negative fractions to zero because negative composition is not physically possible
+for col in element_cols:
+    battery_df.loc[battery_df[col] < 0, col] = 0
+    # Replace negative values with 0
+    # Cap values at 1 since element fractions must be within the range [0, 1]
+    battery_df.loc[battery_df[col] > 1, col] = 1
+
+
+# Recalculate element count
+battery_df['element_count'] = battery_df[element_cols].sum(axis=1)
+
+# Print element count statistics
+print("\nElement count statistics:")
+print(battery_df['element_count'].describe())
+
+# Print the number of compounds with each element count
+element_count_dist = battery_df['element_count'].value_counts().sort_index()
+print("\nDistribution of number of elements per compound:")
+print(element_count_dist)
+```
+
+    
+    Element count statistics:
+    count    3027.000000
+    mean        3.092831
+    std         0.977762
+    min         0.000000
+    25%         2.000000
+    50%         3.000000
+    75%         4.000000
+    max         9.000000
+    Name: element_count, dtype: float64
+    
+    Distribution of number of elements per compound:
+    element_count
+    0.0       1
+    1.0      10
+    2.0     929
+    3.0    1147
+    4.0     693
+    5.0     212
+    6.0      27
+    7.0       6
+    8.0       1
+    9.0       1
+    Name: count, dtype: int64
+
+
+#### Materials Science-Based Features
+
+To improve our models, we'll add features based on materials science principles:
+
+- avg electronegativity
+- avg atomic radius
+- avg ionization energy
+- element diversity
+- element count (from previous cell)
+- valence electors
+- redox potential
+- element interatioons
+
+
+```{python}
+elemental_properties = {
+    'electronegativity': {
+        'H': 2.20, 'Li': 0.98, 'Be': 1.57, 'B': 2.04, 'C': 2.55, 'N': 3.04, 'O': 3.44, 'F': 3.98,
+        'Na': 0.93, 'Mg': 1.31, 'Al': 1.61, 'Si': 1.90, 'P': 2.19, 'S': 2.58, 'Cl': 3.16,
+        'K': 0.82, 'Ca': 1.00, 'Sc': 1.36, 'Ti': 1.54, 'V': 1.63, 'Cr': 1.66, 'Mn': 1.55,
+        'Fe': 1.83, 'Co': 1.88, 'Ni': 1.91, 'Cu': 1.90, 'Zn': 1.65, 'Ga': 1.81, 'Ge': 2.01,
+        'As': 2.18, 'Se': 2.55, 'Br': 2.96, 'Rb': 0.82, 'Sr': 0.95, 'Y': 1.22, 'Zr': 1.33,
+        'Nb': 1.6, 'Mo': 2.16, 'Tc': 1.9, 'Ru': 2.2, 'Rh': 2.28, 'Pd': 2.20, 'Ag': 1.93,
+        'Cd': 1.69, 'In': 1.78, 'Sn': 1.96, 'Sb': 2.05, 'Te': 2.1, 'I': 2.66, 'Cs': 0.79,
+        'Ba': 0.89, 'La': 1.1, 'Ce': 1.12, 'Pr': 1.13, 'Nd': 1.14, 'Sm': 1.17, 'Eu': 1.2,
+        'Gd': 1.2, 'Tb': 1.1, 'Dy': 1.22, 'Ho': 1.23, 'Er': 1.24, 'Tm': 1.25, 'Yb': 1.1,
+        'Lu': 1.27, 'Hf': 1.3, 'Ta': 1.5, 'W': 2.36, 'Re': 1.9, 'Os': 2.2, 'Ir': 2.20,
+        'Pt': 2.28, 'Au': 2.54, 'Hg': 2.00, 'Tl': 1.62, 'Pb': 2.33, 'Bi': 2.02, 'Po': 2.0,
+        'At': 2.2, 'Ra': 0.9, 'Ac': 1.1, 'Th': 1.3, 'Pa': 1.5, 'U': 1.38, 'Np': 1.36, 'Pu': 1.28,
+        'Am': 1.13, 'Cm': 1.28, 'Es': 1.3
+    },
+    'atomic_radius': {
+        'H': 25, 'Li': 145, 'Be': 105, 'B': 85, 'C': 70, 'N': 65, 'O': 60, 'F': 50,
+        'Na': 180, 'Mg': 150, 'Al': 125, 'Si': 110, 'P': 100, 'S': 100, 'Cl': 100,
+        'K': 220, 'Ca': 180, 'Sc': 160, 'Ti': 140, 'V': 135, 'Cr': 140, 'Mn': 140,
+        'Fe': 140, 'Co': 135, 'Ni': 135, 'Cu': 135, 'Zn': 135, 'Ga': 130, 'Ge': 125,
+        'As': 115, 'Se': 115, 'Br': 115, 'Rb': 235, 'Sr': 200, 'Y': 180, 'Zr': 155,
+        'Nb': 145, 'Mo': 145, 'Tc': 135, 'Ru': 130, 'Rh': 135, 'Pd': 140, 'Ag': 160,
+        'Cd': 155, 'In': 155, 'Sn': 145, 'Sb': 145, 'Te': 140, 'I': 140, 'Cs': 260,
+        'Ba': 215, 'La': 195, 'Ce': 185, 'Pr': 185, 'Nd': 185, 'Sm': 185, 'Eu': 185,
+        'Gd': 180, 'Tb': 175, 'Dy': 175, 'Ho': 175, 'Er': 175, 'Tm': 175, 'Yb': 175,
+        'Lu': 175, 'Hf': 155, 'Ta': 145, 'W': 135, 'Re': 135, 'Os': 130, 'Ir': 135,
+        'Pt': 135, 'Au': 135, 'Hg': 150, 'Tl': 190, 'Pb': 180, 'Bi': 160, 'Po': 190,
+        'At': 150, 'Ra': 215, 'Ac': 195, 'Th': 180, 'Pa': 180, 'U': 175, 'Np': 175,
+        'Pu': 175, 'Am': 175, 'Cm': 180, 'Es': 180
+    },
+    'ionization_energy': {
+        'H': 1312, 'Li': 520, 'Be': 900, 'B': 801, 'C': 1086, 'N': 1402, 'O': 1314, 'F': 1681,
+        'Na': 496, 'Mg': 738, 'Al': 578, 'Si': 787, 'P': 1012, 'S': 1000, 'Cl': 1251,
+        'K': 419, 'Ca': 590, 'Sc': 633, 'Ti': 659, 'V': 651, 'Cr': 653, 'Mn': 717,
+        'Fe': 759, 'Co': 760, 'Ni': 737, 'Cu': 746, 'Zn': 906, 'Ga': 579, 'Ge': 762,
+        'As': 947, 'Se': 941, 'Br': 1140, 'Rb': 403, 'Sr': 550, 'Y': 600, 'Zr': 640,
+        'Nb': 652, 'Mo': 684, 'Tc': 702, 'Ru': 710, 'Rh': 720, 'Pd': 805, 'Ag': 731,
+        'Cd': 868, 'In': 558, 'Sn': 709, 'Sb': 834, 'Te': 869, 'I': 1008, 'Cs': 376,
+        'Ba': 503, 'La': 538, 'Ce': 528, 'Pr': 523, 'Nd': 530, 'Sm': 544, 'Eu': 547,
+        'Gd': 592, 'Tb': 564, 'Dy': 573, 'Ho': 581, 'Er': 589, 'Tm': 597, 'Yb': 603,
+        'Lu': 524, 'Hf': 659, 'Ta': 761, 'W': 770, 'Re': 760, 'Os': 840, 'Ir': 880,
+        'Pt': 870, 'Au': 890, 'Hg': 1007, 'Tl': 589, 'Pb': 716, 'Bi': 703, 'Po': 812,
+        'At': 890, 'Ra': 509, 'Ac': 499, 'Th': 587, 'Pa': 568, 'U': 598, 'Np': 605,
+        'Pu': 585, 'Am': 578, 'Cm': 581, 'Es': 619
+    }
+}
+
+# Create weighted average functions for each property
+def add_weighted_properties(df, element_cols, elemental_properties):
+    """Add weighted average properties based on elemental composition"""
+    # For each property, create a new column with weighted average
+    for prop_name, prop_values in elemental_properties.items():
+        # Initialize column with zeros
+        df[f'avg_{prop_name}'] = 0.0
+        # For each element
+        for element in prop_values.keys():
+            # Find corresponding column
+            col_name = f'{element}_fraction'
+            if col_name in element_cols:
+                # Add weighted contribution
+                df[f'avg_{prop_name}'] += df[col_name] * prop_values[element]
+    return df
+
+# Calculate Shannon entropy to measure element diversity
+def calculate_shannon_entropy(row, element_cols):
+    """Calculate diversity of elements using Shannon entropy"""
+    fractions = [row[col] for col in element_cols]
+    # Filter out zeros and normalize
+    fractions = [f for f in fractions if f > 0]
+    if not fractions:
+        return 0
+    total = sum(fractions)
+    fractions = [f/total for f in fractions]
+    return -sum(f * np.log(f) for f in fractions)
+
+# Add weighted properties
+df_enhanced = add_weighted_properties(battery_df, element_cols, elemental_properties)
+
+# Add element diversity
+df_enhanced['element_diversity'] = df_enhanced.apply(
+    lambda row: calculate_shannon_entropy(row, element_cols), axis=1
+)
+
+# Print the features we've engineered
+print("Engineered features summary:")
+engineered_features = ['avg_electronegativity', 'avg_atomic_radius', 'avg_ionization_energy', 
+                       'element_diversity', 'element_count']
+print(df_enhanced[engineered_features].describe())
+```
+
+
+# Correlation analysis
+
+
+```{python}
+correlation_results = {}
+for target in target_vars:
+    # Get correlation for each feature with the target
+    valid_data = df_enhanced[~df_enhanced[target].isna()]
+    if len(valid_data) > 0:  # Only if we have some data
+        correlations = []
+        for feature in engineered_features:
+            corr = np.corrcoef(valid_data[feature], valid_data[target])[0, 1]
+            correlations.append((feature, corr))
+        correlation_results[target] = correlations
+# Print the correlations of engineered features with targets
+for target, correlations in correlation_results.items():
+    print(f"\nCorrelations with {target}:")
+    for feature, corr in correlations:
+        print(f"{feature}: {corr:.4f}")
+```
+
+
+```{python}
+for target in target_vars:
+    if target in correlation_results:
+        # Create a DataFrame with the target and engineered features
+        valid_data = df_enhanced[~df_enhanced[target].isna()]
+        features_df = valid_data[[target] + engineered_features]
+        
+        # Calculate correlation matrix
+        corr_matrix = features_df.corr()
+        
+        # Create heatmap
+        plt.figure(figsize=(10, 8))
+        mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+        sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='coolwarm',
+                   square=True, linewidths=.5, cbar_kws={"shrink": .8})
+        plt.title(f'Correlation Heatmap: {target} vs Engineered Features', fontsize=16)
+        plt.tight_layout()
+        plt.savefig(f'{target}_engineered_features_heatmap.png')
+        plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_36_0.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_36_1.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_36_2.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_36_3.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_36_4.png)
+    
+
+
+Engineered features have higher correlation than elemental compositoins. Let's add more sophisticated fetaures 
+
+
+```{python}
+def add_advanced_features(df, element_cols, elemental_properties):
+    # 1. Calculate electronegativity differences (related to bond polarity)
+    df['max_electronegativity_diff'] = 0.0
+    
+    # For each compound, find the maximum electronegativity difference
+    for compound_idx in df.index:
+        present_elements = []
+        electronegativities = []
+        
+        # Find elements present in this compound
+        for element in elemental_properties['electronegativity'].keys():
+            col = f'{element}_fraction'
+            if col in element_cols and df.loc[compound_idx, col] > 0.01:  # Element is present
+                present_elements.append(element)
+                electronegativities.append(elemental_properties['electronegativity'][element])
+        
+        # Calculate max difference if we have at least 2 elements
+        if len(electronegativities) >= 2:
+            df.loc[compound_idx, 'max_electronegativity_diff'] = max(electronegativities) - min(electronegativities)
+    
+    # 2. Add average valence electron count (important for electrical properties)
+    valence_electrons = {
+        'H': 1, 'Li': 1, 'Na': 1, 'K': 1, 'Rb': 1, 'Cs': 1,  # Group 1
+        'Be': 2, 'Mg': 2, 'Ca': 2, 'Sr': 2, 'Ba': 2,  # Group 2
+        'B': 3, 'Al': 3, 'Ga': 3, 'In': 3, 'Tl': 3,  # Group 13
+        'C': 4, 'Si': 4, 'Ge': 4, 'Sn': 4, 'Pb': 4,  # Group 14
+        'N': 5, 'P': 5, 'As': 5, 'Sb': 5, 'Bi': 5,  # Group 15
+        'O': 6, 'S': 6, 'Se': 6, 'Te': 6, 'Po': 6,  # Group 16
+        'F': 7, 'Cl': 7, 'Br': 7, 'I': 7, 'At': 7,  # Group 17
+        'He': 8, 'Ne': 8, 'Ar': 8, 'Kr': 8, 'Xe': 8, 'Rn': 8,  # Group 18
+        # Transition metals (using common valence states)
+        'Sc': 3, 'Ti': 4, 'V': 5, 'Cr': 6, 'Mn': 7, 'Fe': 3,
+        'Co': 2, 'Ni': 2, 'Cu': 1, 'Zn': 2, 'Y': 3, 'Zr': 4,
+        'Nb': 5, 'Mo': 6, 'Tc': 7, 'Ru': 4, 'Rh': 3, 'Pd': 0,
+        'Ag': 1, 'Cd': 2, 'La': 3, 'Hf': 4, 'Ta': 5, 'W': 6,
+        'Re': 7, 'Os': 4, 'Ir': 3, 'Pt': 2, 'Au': 1, 'Hg': 2
+    }
+    
+    df['avg_valence_electrons'] = 0.0
+    for element, valence in valence_electrons.items():
+        col = f'{element}_fraction'
+        if col in element_cols:
+            df['avg_valence_electrons'] += df[col] * valence
+    
+    # 3. Create key element interactions (for common battery material elements)
+    key_elements = ['Li', 'Na', 'Mn', 'Fe', 'Co', 'Ni', 'O', 'S', 'P', 'F', 'Ti']
+    for i, elem1 in enumerate(key_elements):
+        col1 = f'{elem1}_fraction'
+        if col1 in element_cols:
+            for elem2 in key_elements[i+1:]:
+                col2 = f'{elem2}_fraction'
+                if col2 in element_cols:
+                    # Create interaction feature
+                    df[f'{elem1}_{elem2}_interaction'] = df[col1] * df[col2]
+    
+    # 4. Redox potential indicator (useful for battery materials)
+    # Calculate weighted average based on standard reduction potentials
+    reduction_potentials = {
+        'Li': -3.04, 'Na': -2.71, 'K': -2.93, 'Mg': -2.37, 'Ca': -2.87,
+        'Mn': -1.18, 'Fe': -0.44, 'Co': -0.28, 'Ni': -0.25, 'Cu': 0.34,
+        'Zn': -0.76, 'Al': -1.66, 'Ag': 0.8, 'Au': 1.5, 'Pt': 1.2,
+        'O': 1.23, 'F': 2.87, 'Cl': 1.36, 'Br': 1.07, 'I': 0.54,
+        'S': 0.14, 'P': -0.28, 'N': 0.09, 'C': 0.13, 'Si': -0.91
+    }
+    
+    df['redox_potential'] = 0.0
+    total_fraction = 0.0
+    for element, potential in reduction_potentials.items():
+        col = f'{element}_fraction'
+        if col in element_cols:
+            df['redox_potential'] += df[col] * potential
+            total_fraction += df[col]
+    
+    # Normalize by the total fraction of elements with known potentials
+    mask = total_fraction > 0
+    df.loc[mask, 'redox_potential'] = df.loc[mask, 'redox_potential'] / total_fraction[mask]
+    
+    return df
+
+# Apply advanced feature engineering
+df_enhanced = add_advanced_features(df_enhanced, element_cols, elemental_properties)
+
+# Define our advanced features
+advanced_features = ['max_electronegativity_diff', 'avg_valence_electrons', 'redox_potential']
+
+# Add interaction features between key elements
+interaction_features = [col for col in df_enhanced.columns if '_interaction' in col]
+
+# Our complete feature set
+all_features = element_cols + engineered_features + advanced_features + interaction_features
+for target in target_vars:
+    print(f"\nCorrelations of new features with {target}:")
+    valid_data = df_enhanced[~df_enhanced[target].isna()]
+    for feature in advanced_features + interaction_features[:5]:  # Show top 5 interactions
+        if valid_data[feature].nunique() > 1:  # Only if the feature has variation
+            corr = np.corrcoef(valid_data[feature], valid_data[target])[0, 1]
+            print(f" {feature}: {corr:.4f}")
+```
+
+
+```{python}
+# Create correlation heatmaps for advanced features
+for target in baseline_target_vars:
+    # Create a DataFrame with the target and advanced features
+    valid_data = df_enhanced[~df_enhanced[target].isna()]
+    selected_features = advanced_features + interaction_features[:5]  # Top 5 interaction features
+    features_df = valid_data[[target] + selected_features]
+    
+    # Calculate correlation matrix
+    corr_matrix = features_df.corr()
+    
+    # Create heatmap
+    plt.figure(figsize=(12, 10))
+    mask = np.triu(np.ones_like(corr_matrix, dtype=bool))
+    sns.heatmap(corr_matrix, mask=mask, annot=True, fmt='.2f', cmap='coolwarm',
+               square=True, linewidths=.5, cbar_kws={"shrink": .8})
+    plt.title(f'Correlation Heatmap: {target} vs Advanced Features', fontsize=16)
+    plt.tight_layout()
+    plt.savefig(f'{target}_advanced_features_heatmap.png')
+    plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_39_0.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_39_1.png)
+    
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_39_2.png)
+    
+
+
+Let's now analyze correlations of our top features
+
+
+```{python}
+plt.figure(figsize=(18, 15))
+# Define target variables for modeling
+targets = ['Capacity', 'Energy', 'Voltage']
+n_top_features = 10  # Number of top features to show for each target
+
+# Calculate correlations for each target
+for i, target in enumerate(targets):
+    # Get data where this target is not null
+    valid_data = df_enhanced[~df_enhanced[target].isna()]
+    correlations = []
+    
+    # Calculate correlation for all features
+    for feature in element_cols + engineered_features + advanced_features:
+        if feature in valid_data.columns and valid_data[feature].nunique() > 1:
+            corr = np.corrcoef(valid_data[feature], valid_data[target])[0, 1]
+            correlations.append((feature, corr))
+    
+    # Sort by absolute correlation value and get top N
+    correlations.sort(key=lambda x: abs(x[1]), reverse=True)
+    top_corrs = correlations[:n_top_features]
+    
+    # Create dataframe for heatmap
+    features = [item[0] for item in top_corrs]
+    corrs = [item[1] for item in top_corrs]
+    
+    # Create subplot
+    plt.subplot(3, 1, i+1)
+    
+    # Create horizontal bar chart
+    colors = ['#2171b5' if c < 0 else '#cb181d' for c in corrs]
+    bars = plt.barh([f.replace('_fraction', '').replace('_', ' ') for f in features],
+                  corrs, color=colors)
+    
+    # Add values to the end of each bar
+    for bar in bars:
+        width = bar.get_width()
+        label_x_pos = width + 0.01 if width > 0 else width - 0.07
+        plt.text(label_x_pos, bar.get_y() + bar.get_height()/2,
+                f'{width:.3f}', va='center')
+    
+    plt.axvline(x=0, color='black', linestyle='-', alpha=0.3)
+    plt.title(f'Top Correlations with {target}', fontsize=16)
+    plt.xlabel('Correlation Coefficient', fontsize=14)
+    plt.xlim(-0.4, 0.4)  # Set consistent scale
+
+plt.tight_layout()
+plt.savefig('separate_correlation_charts.png', dpi=300)
+plt.close() #plt.show()
+```
+
+
+    
+![png](Final%20Report_files/Final%20Report_41_0.png)
+    
+From the bar charts above we can see that all three target variables benefitted from the added predictors with the previous max correlation being 0.2 and 
+now 0.2 is around the average
+
+### Enhanced Predictive Modeling
+
+Using our expanded feature set, we'll develop improved models for our three main target variables.
+
+#### Model Architecture
+
+
+```{python}
+# Focus on our three target variables with more data
+target_vars = ['Capacity', 'Energy', 'Voltage']
+
+# Define architectures for each target
+architectures = {
+    'Capacity': {
+        'layers': [64, 32],
+        'dropout': [0.3, 0.2],
+        'l2': 0.001
+    },
+    'Energy': {
+        'layers': [64, 32],
+        'dropout': [0.3],
+        'l2': 0.001
+    },
+    'Voltage': {
+        'layers': [64, 32],
+        'dropout': [0.3, 0.2],
+        'l2': 0.001
+    }
+}
+
+# Function to build model with the specified architecture
+def build_model(input_shape, architecture):
+    """Build a neural network with the specified architecture"""
+    model = keras.Sequential()
+    
+    # First layer
+    model.add(layers.Dense(
+        architecture['layers'][0],
+        activation='relu',
+        input_shape=(input_shape,),
+        kernel_regularizer=regularizers.l2(architecture['l2'])
+    ))
+    model.add(layers.BatchNormalization())
+    
+    # Add dropout if specified
+    if len(architecture['dropout']) > 0:
+        model.add(layers.Dropout(architecture['dropout'][0]))
+    
+    # Hidden layers
+    for i in range(1, len(architecture['layers'])):
+        model.add(layers.Dense(
+            architecture['layers'][i],
+            activation='relu',
+            kernel_regularizer=regularizers.l2(architecture['l2'])
+        ))
+        model.add(layers.BatchNormalization())
+        
+        # Add dropout if specified
+        if i < len(architecture['dropout']):
+            model.add(layers.Dropout(architecture['dropout'][i]))
+    
+    # Output layer
+    model.add(layers.Dense(1))
+    
+    return model
+
+# Function to train model with early stopping and learning rate scheduling
+def train_enhanced_nn(X, y, test_size=0.2, random_state=42):
+    """Train a neural network with advanced features and architectures"""
+    # Split data
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
+    
+    # Scale features and target
+    X_scaler = StandardScaler()
+    X_train_scaled = X_scaler.fit_transform(X_train)
+    X_test_scaled = X_scaler.transform(X_test)
+    
+    y_scaler = StandardScaler()
+    y_train_scaled = y_scaler.fit_transform(y_train.values.reshape(-1, 1)).flatten()
+    y_test_scaled = y_scaler.transform(y_test.values.reshape(-1, 1)).flatten()
+    
+    # Create model with slightly simpler architecture for better regularization
+    model = keras.Sequential([
+        # Larger first layer to process many features
+        layers.Dense(64, activation='relu', input_shape=(X_train.shape[1],),
+                    kernel_regularizer=regularizers.l2(0.001)),
+        layers.BatchNormalization(),
+        layers.Dropout(0.3),
+        
+        # Narrower second layer
+        layers.Dense(32, activation='relu',
+                    kernel_regularizer=regularizers.l2(0.001)),
+        layers.BatchNormalization(),
+        layers.Dropout(0.2),
+        
+        # Output layer
+        layers.Dense(1)
+    ])
+    
+    # Compile model with a learning rate scheduler
+    initial_learning_rate = 0.001
+    # Apply exponential learning rate decay to reduce the learning rate over time, helping convergence
+    lr_schedule = keras.optimizers.schedules.ExponentialDecay(
+        initial_learning_rate, decay_steps=1000, decay_rate=0.9, staircase=True
+    )
+    optimizer = keras.optimizers.legacy.Adam(learning_rate=lr_schedule)
+    model.compile(optimizer=optimizer, loss='mse', metrics=['mae'])
+    
+    # Define early stopping with more patience
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor='val_loss',
+        patience=30,
+        restore_best_weights=True
+    )
+    
+    # Train model
+    history = model.fit(
+        X_train_scaled, y_train_scaled,
+        validation_split=0.2,
+        epochs=300,
+        batch_size=32,
+        callbacks=[early_stopping],
+        verbose=0
+    )
+    
+    # Evaluate model
+    y_pred_scaled = model.predict(X_test_scaled, verbose=0).flatten()
+    y_pred = y_scaler.inverse_transform(y_pred_scaled.reshape(-1, 1)).flatten()
+    
+    # Calculate metrics
+    mse = mean_squared_error(y_test, y_pred)
+    rmse = np.sqrt(mse)
+    r2 = r2_score(y_test, y_pred)
+    
+    # Create a dictionary with all important outputs
+    result = {
+        'model': model,
+        'history': history,
+        'X_scaler': X_scaler,
+        'y_scaler': y_scaler,
+        'y_test': y_test,
+        'y_pred': y_pred,
+        'mse': mse,
+        'rmse': rmse,
+        'r2': r2,
+        'train_size': len(X_train),
+        'test_size': len(X_test)
+    }
+    
+    return result
+```
+
+#### Model Training and Evaluation
+
+
+```{python}
+# Train models for each target with enhanced features
+enhanced_models = {}
+for target in target_vars:
+    print(f"\nTraining enhanced model for {target}...")
+    # Get valid data for this target
+    mask = ~df_enhanced[target].isna()
+    X = df_enhanced[all_features][mask]
+    y = df_enhanced[target][mask]
+    
+    # Train model
+    result = train_enhanced_nn(X, y)
+    enhanced_models[target] = result
+    
+    # Print performance metrics
+    print(f" Samples: {result['train_size']} train, {result['test_size']} test")
+    print(f" RMSE: {result['rmse']:.4f}")
+    print(f" R²: {result['r2']:.4f}")
+```
+
+
+
+```{python}
+# Learning curves for all three models
+plt.figure(figsize=(15, 15))
+for i, target in enumerate(target_vars):
+    plt.subplot(3, 1, i+1)
+    plt.plot(enhanced_models[target]['history'].history['loss'], label='Training Loss')
+    plt.plot(enhanced_models[target]['history'].history['val_loss'], label='Validation Loss')
+    plt.title(f'Learning Curves for {target} Prediction', fontsize=14)
+    plt.xlabel('Epochs', fontsize=12)
+    plt.ylabel('Loss', fontsize=12)
+    plt.legend()
+    
+    # Add key metrics as text
+    plt.text(0.05, 0.85, f"R² = {enhanced_models[target]['r2']:.3f}", 
+             transform=plt.gca().transAxes)
+    plt.text(0.05, 0.78, f"RMSE = {enhanced_models[target]['rmse']:.3f}", 
+             transform=plt.gca().transAxes)
+    plt.text(0.05, 0.71, 
+             f"Samples = {enhanced_models[target]['train_size']} train, {enhanced_models[target]['test_size']} test",
+             transform=plt.gca().transAxes, fontsize=9)
+
+plt.tight_layout()
+plt.savefig('enhanced_learning_curves.png', dpi=300)
+plt.close() #plt.show()
+
+```
+
+    
+![png](Final%20Report_files/Final%20Report_47_0.png)
+    
+
+
+
+```{python}
+# Actual vs Predicted scatter plots with error distribution
+plt.figure(figsize=(15, 15))
+for i, target in enumerate(target_vars):
+    # Scatter plot
+    plt.subplot(3, 2, 2*i+1)
+    plt.scatter(enhanced_models[target]['y_test'], enhanced_models[target]['y_pred'], 
+                alpha=0.5, color='steelblue')
+    
+    # Perfect prediction line
+    min_val = min(min(enhanced_models[target]['y_test']), min(enhanced_models[target]['y_pred']))
+    max_val = max(max(enhanced_models[target]['y_test']), max(enhanced_models[target]['y_pred']))
+    plt.plot([min_val, max_val], [min_val, max_val], 'r--')
+    
+    plt.title(f'{target}: Actual vs Predicted (R² = {enhanced_models[target]["r2"]:.3f})',
+              fontsize=14)
+    plt.xlabel('Actual Values', fontsize=12)
+    plt.ylabel('Predicted Values', fontsize=12)
+    
+    # Error distribution
+    plt.subplot(3, 2, 2*i+2)
+    errors = enhanced_models[target]['y_pred'] - enhanced_models[target]['y_test']
+    sns.histplot(errors, kde=True, color='steelblue')
+    plt.axvline(0, color='r', linestyle='--')
+    plt.title(f'{target} Prediction Error Distribution (RMSE = {enhanced_models[target]["rmse"]:.3f})',
+              fontsize=14)
+    plt.xlabel('Prediction Error', fontsize=12)
+
+plt.tight_layout()
+plt.savefig('enhanced_prediction_results.png', dpi=300)
+plt.close() #plt.show()
+
+```
+
+    
+![png](Final%20Report_files/Final%20Report_48_0.png)
+    
+
+
+Compare the performance metrics across baseline and enhanced models
+
+
+```{python}
+# Performance comparison between baseline and enhanced models
+plt.figure(figsize=(12, 8))
+comparison_data = {
+    'Baseline R²': [baseline_models[t]['r2'] for t in target_vars],
+    'Enhanced R²': [enhanced_models[t]['r2'] for t in target_vars],
+    'Baseline RMSE (norm)': [baseline_models[t]['rmse']/baseline_models[t]['y_test'].std() 
+                           for t in target_vars],
+    'Enhanced RMSE (norm)': [enhanced_models[t]['rmse']/enhanced_models[t]['y_test'].std() 
+                           for t in target_vars]
+}
+
+# Set up the figure
+x = np.arange(len(target_vars))
+width = 0.2
+
+fig, ax = plt.subplots(figsize=(14, 8))
+
+# Plot R² scores
+ax.bar(x - width*1.5, comparison_data['Baseline R²'], width, 
+       label='Baseline R²', color='skyblue')
+ax.bar(x - width/2, comparison_data['Enhanced R²'], width, 
+       label='Enhanced R² ', color='steelblue')
+
+# Plot RMSE scores
+ax.bar(x + width/2, comparison_data['Baseline RMSE (norm)'], width, 
+       label='Baseline RMSE/σ (lower is better)', color='lightcoral')
+ax.bar(x + width*1.5, comparison_data['Enhanced RMSE (norm)'], width, 
+       label='Enhanced RMSE/σ (lower is better)', color='firebrick')
+
+# Add data labels
+for i, v in enumerate(comparison_data['Baseline R²']):
+    ax.text(i - width*1.5, v + 0.02, f'{v:.3f}', ha='center')
+for i, v in enumerate(comparison_data['Enhanced R²']):
+    ax.text(i - width/2, v + 0.02, f'{v:.3f}', ha='center')
+for i, v in enumerate(comparison_data['Baseline RMSE (norm)']):
+    ax.text(i + width/2, v + 0.02, f'{v:.3f}', ha='center')
+for i, v in enumerate(comparison_data['Enhanced RMSE (norm)']):
+    ax.text(i + width*1.5, v + 0.02, f'{v:.3f}', ha='center')
+
+ax.set_xticks(x)
+ax.set_xticklabels(target_vars, fontsize=12)
+ax.set_ylabel('Score', fontsize=14)
+ax.set_title('Performance Comparison: Baseline vs Enhanced Models', fontsize=16)
+ax.legend(fontsize=10)
+ax.grid(axis='y', alpha=0.3)
+
+plt.tight_layout()
+plt.savefig('model_performance_comparison.png', dpi=300)
+plt.close() #plt.show()
+
+```
+
+    <Figure size 1200x800 with 0 Axes>
+
+
+
+    
+![png](Final%20Report_files/Final%20Report_50_1.png)
+    
+
+
+Analyze features most important for the predictive models:
+
+
+```{python}
+# Function to analyze feature importance
+def analyze_feature_importance(model, feature_names, target_name):
+    """Analyze feature importance by measuring effect on model predictions"""
+    # Create a baseline X with all values at their mean
+    X_baseline = np.zeros((1, len(feature_names)))
+    
+    # For each feature, calculate the effect of changing it by 1 std dev
+    importances = []
+    for i, feature in enumerate(feature_names):
+        # Create two copies of the baseline
+        X_minus = X_baseline.copy()
+        X_plus = X_baseline.copy()
+        
+        # Modify the feature of interest
+        X_minus[0, i] = -1  # -1 std dev
+        X_plus[0, i] = 1    # +1 std dev
+        
+        # Predict
+        pred_minus = model.predict(X_minus, verbose=0)[0, 0]
+        pred_plus = model.predict(X_plus, verbose=0)[0, 0]
+        
+        # Calculate importance as the change in prediction
+        importance = abs(pred_plus - pred_minus)
+        importances.append((feature, importance))
+    
+    # Sort by importance
+    importances.sort(key=lambda x: x[1], reverse=True)
+    return importances
+
+# Plot feature importance for all models
+plt.figure(figsize=(15, 15))
+for i, target in enumerate(target_vars):
+    # Get the model
+    model = enhanced_models[target]['model']
+    
+    # Analyze feature importance
+    importances = analyze_feature_importance(model, all_features, target)
+    
+    # Plot top 10 features
+    plt.subplot(3, 1, i+1)
+    features = [f[0].replace('_fraction', '').replace('_', ' ') for f in importances[:10]]
+    values = [f[1] for f in importances[:10]]
+    
+    plt.barh(features, values, color='steelblue')
+    plt.title(f'Feature Importance for {target} Prediction', fontsize=14)
+    plt.xlabel('Importance', fontsize=12)
+
+plt.tight_layout()
+plt.savefig('enhanced_feature_importance.png', dpi=300)
+plt.close() #plt.show()
+
+```
+
+    
+![png](Final%20Report_files/Final%20Report_52_0.png)
+    
+The above data aligns with material science principles:
+- Energy being most influence by reactions between elements and oxygen: chemical exothermic reactions
+- Capacity and voltage depend on the type of element itself and we can see that our engineered electronegativity helps the model predict voltage better
+
+Our analysis of battery materials data has yielded several important insights:
+
+1. **Data Availability Challenges**: 
+   - The dataset is extremely sparse, with critical properties like Coulombic Efficiency and Conductivity missing for over 90% of compounds.
+   - This sparsity significantly limited model performance, especially for the properties with the least available data.
+
+2. **Correlation Analysis**:
+   - Individual elemental compositions show relatively weak direct correlations with battery properties.
+   - Materials science-derived features (like electronegativity differences and element interactions) showed stronger correlations than raw elemental fractions.
+   - Correlation heatmaps revealed complex interactions between elements and battery properties.
+
+3. **Baseline vs. Enhanced Models**:
+   - Baseline models using only element fractions had limited predictive power.
+   - Enhanced models incorporating materials science principles showed improved performance.
+   - Voltage was the most predictable property in both cases.
+   - We have managed to also significantly lower the validation scores relative to the baseline showing good promise in fixing the overfitting issue
+
+4. **Predictive Performance**:
+   - Voltage showed the best predictive capability (R² ~ 0.161)
+   - Capacity showed slight predictive capability (R² ~ 0.1)
+   - Energy models struggled to generalize well (R² < 0) While less than 0, it is a major imporvement from the baseline
+
+5. **Important Features**:
+   - Electronegativity difference was consistently important, highlighting the role of bond polarity in battery performance.
+   - Element diversity was correlated with battery properties, suggesting compound complexity affects performance.
+   - Key element interactions, especially those involving lithium, were important predictors.
+
+6. **Conclusion**:
+    - Data sparsity proved to be quite a challenge
+    - Feature engineering worked in reducing the issues from lack of data
+    - A combination of better data and advanced feature engineering might help to develop better preditctive models
